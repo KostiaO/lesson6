@@ -32,7 +32,7 @@ func (s *Store) CreateCollection(name string, cfg *CollectionConfig) (bool, *Col
 
 	s.Storage[name] = newCollection
 
-	slog.Default().Info("created new collection:", name, "primaryKey:", cfg.PrimaryKey)
+	slog.Default().Info("created new collection:", slog.Any(name, cfg.PrimaryKey))
 
 	return true, newCollection
 }
