@@ -1,5 +1,14 @@
 package document_store
 
+import (
+	"bufio"
+	"encoding/json"
+	"errors"
+	"io"
+	"log/slog"
+	"os"
+)
+
 type Store struct {
 	Storage map[string]*Collection
 }
@@ -23,6 +32,8 @@ func (s *Store) CreateCollection(name string, cfg *CollectionConfig) (bool, *Col
 
 	s.Storage[name] = newCollection
 
+	slog.Default().Info("created new collection:", name, "primaryKey:", cfg.PrimaryKey)
+
 	return true, newCollection
 }
 
@@ -41,30 +52,99 @@ func (s *Store) DeleteCollection(name string) bool {
 		return true
 	}
 
+	slog.Default().Info("deleted collection:", name)
+
 	return false
 }
 
 func NewStoreFromDump(dump []byte) (*Store, error) {
-	// Функція повинна створити та проініціалізувати новий `Store`
-	// зі всіма колекціями да даними з вхідного дампу.
+	var collections *map[string]*Collection
 
+	err := json.Unmarshal(dump, collections)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if collections == nil {
+		return nil, err
+	}
+
+	store := NewStore()
+
+	store.Storage = *collections
+
+	return store, nil
 }
 
 func (s *Store) Dump() ([]byte, error) {
-	// Методи повинен віддати дамп нашого стору в який включені дані про колекції та документ
+	dump, err := json.Marshal(s.Storage)
 
-	// TODO: Implement
+	if err != nil {
+		return nil, err
+	}
+
+	return dump, nil
 }
 
-// Значення яке повертає метод `store.Dump()` має без помилок оброблятись функцією `NewStoreFromDump`
-
 func NewStoreFromFile(filename string) (*Store, error) {
-	// Робить те ж саме що і функція `NewStoreFromDump`, але сам дамп має діставатись з файлу
-	// TODO: Implement
+	var errs error = nil
+
+	file, err := os.OpenFile(filename, os.O_RDONLY, 0666)
+
+	if err != nil {
+		return nil, errors.Join(errs, err)
+	}
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}()
+
+	reader := bufio.NewReader(file)
+
+	fileBytes, errReading := reader.ReadBytes('\n')
+
+	if errReading != nil && !errors.Is(errReading, io.EOF) {
+		return nil, errors.Join(errs, errReading)
+	}
+
+	store, errStoringDump := NewStoreFromDump(fileBytes)
+
+	if errStoringDump != nil {
+		return nil, errors.Join(errs, errStoringDump)
+	}
+
+	return store, errs
 }
 
 func (s *Store) DumpToFile(filename string) error {
-	// Робить те ж саме що і метод  `Dump`, але записує у файл замість того щоб повертати сам дамп
+	var errs error = nil
 
-	// TODO: Implement
+	file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+
+	if err != nil {
+		return errors.Join(errs, err)
+	}
+
+	defer func() {
+		if err := file.Close(); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}()
+
+	dumpToWrite, errDumping := s.Dump()
+
+	if errDumping != nil {
+		return errors.Join(errs, errDumping)
+	}
+
+	_, errWriting := file.Write(dumpToWrite)
+
+	if errWriting != nil {
+		return errors.Join(errs, errWriting)
+	}
+
+	return errs
 }

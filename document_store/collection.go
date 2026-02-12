@@ -1,6 +1,9 @@
 package document_store
 
-import "errors"
+import (
+	"errors"
+	"log/slog"
+)
 
 var (
 	ErrPrimaryKeysDoesNotMatch = errors.New("primary key of doc does not correspond to primary key of collection")
@@ -31,6 +34,8 @@ func (s *Collection) Put(doc Document) error {
 		s.Data[newDocKey] = &doc
 	}
 
+	slog.Default().Info("added document to collection:", slog.Any(keyField.Value.(string), doc))
+
 	return nil
 }
 
@@ -41,13 +46,15 @@ func (s *Collection) Get(key string) (*Document, bool) {
 }
 
 func (s *Collection) Delete(key string) bool {
-	_, ok := s.Data[key]
+	doc, ok := s.Data[key]
 
 	if !ok {
 		return false
 	}
 
 	delete(s.Data, key)
+
+	slog.Default().Info("deleted document in collection:", slog.Any(key, *doc))
 
 	return true
 }
